@@ -1,42 +1,34 @@
-const { app, BrowserWindow, Tray, Menu } = require("electron");
+const { app, BrowserWindow } = require("electron");
 const path = require("path");
-const { spawn } = require("child_process");
-
-let electron;
+const { setupRecordingListener } = require("../server/transcriber");
 
 function createWindow() {
-  electron = new BrowserWindow({
-    width: 1500,
-    height: 1200,
+  const mainWindow = new BrowserWindow({
+    width: 1600,
+    height: 900,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      nodeIntegration: true,
+      nodeIntegration: false,
       contextIsolation: true,
     },
   });
-  electron.loadURL("http://localhost:5173");
-  electron.webContents.openDevTools();
-  electron.webContents.on("did-finish-load", () => {
-    let backend = spawn("node", [
-      "../meeting-transcripts/backend/transcriber.js",
-    ]);
 
-    backend.stdout.on("data", (data) => {
-      console.log(`[transcriber]: ${data}`);
-      electron.webContents.send("transcript-data", data.toString());
-    });
+  const startUrl =
+    process.env.NODE_ENV === "development"
+      ? "http://localhost:5173"
+      : `file://${path.join(__dirname, "../dist/index.html")}`;
 
-    backend.stderr.on("data", (data) => {
-      console.error(`[transcriber error]: ${data}`);
-    });
-  });
+  mainWindow.loadURL(startUrl);
+
+  if (process.env.NODE_ENV === "development") {
+    mainWindow.webContents.openDevTools();
+  }
+
+  console.log("[main/index.js] intialize recording listerner");
+  setupRecordingListener();
 }
 
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(createWindow);
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: "Show App", click: () => mainWindow.show() },
-    { label: "Quit", click: () => app.quit() },
-  ]);
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });

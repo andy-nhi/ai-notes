@@ -8,3 +8,7 @@ temp_audio.txt
 temp_audio.vtt
 temp_audio.wav
 transcript.txt
+	
+database-debug.log
+firebase-debug.log
+firestore-debug.log
