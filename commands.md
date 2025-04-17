@@ -1,3 +1,7 @@
+**homebrew**
+blackhole-2ch
+openjdk
+
 **firebase**
 
 ```bash
