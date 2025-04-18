@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { db } from "./db/firebase";
 import { doc, deleteDoc, onSnapshot, setDoc } from "firebase/firestore";
+import Transcript from "./components/transcripts";
+import Notes from "./components/notes";
 
 export default function App() {
   const [notes, setNotes] = useState("");
@@ -33,20 +33,39 @@ export default function App() {
     }
   };
 
-  const clearTranscripts = () => {
-    setRawTranscript("");
-    setFormattedTranscript("");
-    setNotes("");
-    deleteDoc(db, "meetings", "current");
-    deleteDoc(db, "controls", "recording");
+  const clearTranscripts = async () => {
+    try {
+      setIsLoading(true);
+      setRawTranscript("");
+      setFormattedTranscript("");
+      setNotes("");
+
+      const meetingRef = doc(db, "meetings", "current");
+      const controlRef = doc(db, "controls", "recording");
+
+      await deleteDoc(meetingRef);
+      await deleteDoc(controlRef);
+
+      await setDoc(
+        controlRef,
+        {
+          status: "idle",
+          command: "stop",
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error("Delete error:", err);
+      setError("Failed to clear transcripts");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Firebase listeners
   useEffect(() => {
     const unsubscribeFunctions = [];
     setIsLoading(true);
 
-    // Meeting data listener
     const meetingUnsub = onSnapshot(
       doc(db, "meetings", "current"),
       (doc) => {
@@ -65,7 +84,6 @@ export default function App() {
     );
     unsubscribeFunctions.push(meetingUnsub);
 
-    // Recording status listener
     const controlUnsub = onSnapshot(
       doc(db, "controls", "recording"),
       (doc) => {
@@ -83,24 +101,14 @@ export default function App() {
     return () => unsubscribeFunctions.forEach((unsub) => unsub());
   }, []);
 
-  // Get current transcript view
-  const getCurrentTranscript = () => {
-    switch (activeTranscript) {
-      case "raw":
-        return rawTranscript;
-      default:
-        return formattedTranscript;
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
-      <header className="flex justify-between items-center mb-8">
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-6 flex flex-col">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-8">
         <h1 className="text-2xl font-bold">Meeting Assistant</h1>
-        <div className="flex gap-4">
+        <div className="flex gap-2 md:gap-4 w-full md:w-auto">
           <button
             onClick={clearTranscripts}
-            className="px-4 py-2 rounded-lg font-medium bg-gray-600 hover:bg-gray-700 disabled:opacity-50"
+            className="px-3 py-1 md:px-4 md:py-2 rounded-lg font-medium bg-gray-600 hover:bg-gray-700 disabled:opacity-50 flex-1 md:flex-none"
             disabled={isLoading || !rawTranscript}
           >
             Restart
@@ -108,17 +116,13 @@ export default function App() {
           <button
             onClick={toggleRecording}
             disabled={isLoading}
-            className={`px-4 py-2 rounded-lg font-medium ${
+            className={`px-3 py-1 md:px-4 md:py-2 rounded-lg font-medium ${
               isRecording
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-green-600 hover:bg-green-700"
-            } disabled:opacity-50`}
+            } disabled:opacity-50 flex-1 md:flex-none`}
           >
-            {isLoading
-              ? "Loading..."
-              : isRecording
-              ? "Stop Recording"
-              : "Start Recording"}
+            {isLoading ? "Loading..." : isRecording ? "Stop" : "Start"}
           </button>
         </div>
       </header>
@@ -132,55 +136,18 @@ export default function App() {
         </div>
       )}
 
-      <div className="grid gap-6">
-        {/* Transcript Panel */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Live Transcript</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setActiveTranscript("formatted")}
-                className={`px-3 py-1 text-sm rounded ${
-                  activeTranscript === "formatted"
-                    ? "bg-blue-600"
-                    : "bg-gray-600 hover:bg-gray-700"
-                }`}
-              >
-                Formatted
-              </button>
-              <button
-                onClick={() => setActiveTranscript("raw")}
-                className={`px-3 py-1 text-sm rounded ${
-                  activeTranscript === "raw"
-                    ? "bg-blue-600"
-                    : "bg-gray-600 hover:bg-gray-700"
-                }`}
-              >
-                Raw
-              </button>
-            </div>
-          </div>
-
-          <div className="h-64 overflow-y-auto bg-gray-700 p-4 rounded whitespace-pre-wrap">
-            {getCurrentTranscript() || (
-              <p className="text-gray-400">
-                {isLoading ? "Loading..." : "No transcript available"}
-              </p>
-            )}
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 flex-1 min-h-0">
+        <div className="lg:col-span-1 h-full">
+          <Transcript
+            rawTranscript={rawTranscript}
+            formattedTranscript={formattedTranscript}
+            activeTranscript={activeTranscript}
+            setActiveTranscript={setActiveTranscript}
+            isLoading={isLoading}
+          />
         </div>
-
-        {/* Notes Panel */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <div className="prose max-w-none text-gray-100">
-            {isLoading ? (
-              <p className="text-gray-400">Loading notes...</p>
-            ) : (
-              <Markdown remarkPlugins={[remarkGfm]}>
-                {notes || "No notes generated yet"}
-              </Markdown>
-            )}
-          </div>
+        <div className="lg:col-span-3 h-full">
+          <Notes notes={notes} isLoading={isLoading} />
         </div>
       </div>
     </div>

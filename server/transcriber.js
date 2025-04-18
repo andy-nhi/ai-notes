@@ -182,28 +182,32 @@ async function enhanceTranscript(rawText) {
       "http://127.0.0.1:11434/api/generate",
       {
         model: llmModel,
-        prompt: `You are an expert meeting assistant. Given the raw meeting transcript below, extract and summarize the most important points in this EXACT format:
-         
-        ### Key Discussion Points   
+        prompt: `You are an expert meeting assistant. Transform this transcript into structured meeting notes using EXACTLY this format:
+
+        # Meeting Summary
+
+        ## Key Discussion Points
         - [Concise bullet point 3-7 words]
-        - [Concise bullet point 3-7 words] 
         - [Concise bullet point 3-7 words]
-        
-        ### Action Items
-        - [Owner]: [Task description in 3-5 words] (due: [date if mentioned])
-        - [Owner]: [Task description in 3-5 words] (due: [date if mentioned])
-        
-        ### Decisions Made
+        - [Concise bullet point 3-7 words]
+
+        ## Action Items
+        - [Owner]: [Task in 3-5 words] (due: [date if mentioned])
+        - [Owner]: [Task in 3-5 words] (due: [date if mentioned])
+
+        ## Decisions Made
         - [Topic]: [Decision in 5-8 words]
         - [Topic]: [Decision in 5-8 words]
-        
-        Rules:
-        1. Keep EVERY bullet point VERY short (under 10 words)
-        2. Only include truly important information
-        3. Use exact format above with these section headers
-        4. If a section has no content, omit it entirely
-        5. Never write paragraphs - only bullet points
-                
+
+        RULES:
+        1. Use exactly these section headers (with ##)
+        2. Keep bullets VERY short (under 10 words)
+        3. Only include important information
+        4. Omit empty sections completely
+        5. Never indent any lines
+        6. No paragraphs - only bullet points
+        7. Maintain consistent github Markdown syntax
+
         Transcript:
         \`\`\`
         ${formatResponse}
@@ -218,7 +222,7 @@ async function enhanceTranscript(rawText) {
       docRef,
       {
         formattedTranscript: formattedText,
-        meetingNotes: `${summaryResponse.data.response}`,
+        meetingNotes: summaryResponse.data.response.replace(/\\n/g, "\n"),
         updatedAt: new Date(),
       },
       { merge: true }

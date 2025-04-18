@@ -1,6 +1,7 @@
 /node_modules
 /temp_whisper_output
 transcript.txt
+temp_audio.wav
 	
 database-debug.log
 firebase-debug.log

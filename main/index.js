@@ -6,10 +6,6 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1600,
     height: 900,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
   });
 
   const startUrl =
@@ -19,9 +15,10 @@ function createWindow() {
 
   mainWindow.loadURL(startUrl);
 
-  if (process.env.NODE_ENV === "development") {
-    mainWindow.webContents.openDevTools();
-  }
+  // if (process.env.NODE_ENV === "development") {
+  mainWindow.webContents.openDevTools({ mode: "right" });
+
+  // }
 
   console.log("[main/index.js] intialize recording listerner");
   setupRecordingListener();

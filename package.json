@@ -15,7 +15,7 @@
     "@vitejs/plugin-react": "^4.4.0",
     "axios": "^1.6.0",
     "child_process": "^1.0.2",
-    "electron": "^28.1.0",
+    "electron": "^35.1.5",
     "firebase": "^11.6.0",
     "firebase-admin": "^13.2.0",
     "fs": "^0.0.1-security",
