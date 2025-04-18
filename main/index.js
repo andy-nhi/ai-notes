@@ -1,6 +1,10 @@
 const { app, BrowserWindow } = require("electron");
+const chalk = require("chalk");
 const path = require("path");
-const { setupRecordingListener } = require("../server/transcriber");
+const {
+  setupClearListener,
+  setupRecordingListener,
+} = require("../server/transcriber");
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -20,8 +24,9 @@ function createWindow() {
 
   // }
 
-  console.log("[main/index.js] intialize recording listerner");
+  console.log(chalk.green("[main/index.js] intialize recording listerner"));
   setupRecordingListener();
+  setupClearListener();
 }
 
 app.whenReady().then(createWindow);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { db } from "./db/firebase";
 import { doc, deleteDoc, onSnapshot, setDoc } from "firebase/firestore";
 import Transcript from "./components/transcripts";
@@ -7,20 +7,26 @@ import Notes from "./components/notes";
 export default function App() {
   const [notes, setNotes] = useState("");
   const [rawTranscript, setRawTranscript] = useState("");
-  const [formattedTranscript, setFormattedTranscript] = useState("");
-  const [activeTranscript, setActiveTranscript] = useState("formatted");
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const lastCommandSent = useRef(null);
 
   const toggleRecording = async () => {
+    const newCommand = isRecording ? "stop" : "start";
+
+    // Prevent duplicate commands
+    if (lastCommandSent.current === newCommand) return;
+
     try {
       setIsLoading(true);
+      lastCommandSent.current = newCommand;
+
       const docRef = doc(db, "controls", "recording");
       await setDoc(
         docRef,
         {
-          command: isRecording ? "stop" : "start",
+          command: newCommand,
           timestamp: new Date(),
         },
         { merge: true }
@@ -37,25 +43,21 @@ export default function App() {
     try {
       setIsLoading(true);
       setRawTranscript("");
-      setFormattedTranscript("");
       setNotes("");
 
       const meetingRef = doc(db, "meetings", "current");
-      const controlRef = doc(db, "controls", "recording");
+      const recordingRef = doc(db, "controls", "recording");
+      const clearRef = doc(db, "controls", "clear");
 
       await deleteDoc(meetingRef);
-      await deleteDoc(controlRef);
-
       await setDoc(
-        controlRef,
-        {
-          status: "idle",
-          command: "stop",
-        },
+        recordingRef,
+        { status: "idle", command: "stop" },
         { merge: true }
       );
+      await setDoc(clearRef, { command: "clear" }, { merge: true });
     } catch (err) {
-      console.error("Delete error:", err);
+      console.error("Clear error:", err);
       setError("Failed to clear transcripts");
     } finally {
       setIsLoading(false);
@@ -72,7 +74,6 @@ export default function App() {
         if (doc.exists()) {
           const data = doc.data();
           setRawTranscript(data.rawTranscript || "");
-          setFormattedTranscript(data.formattedTranscript || "");
           setNotes(data.meetingNotes || "");
         }
         setIsLoading(false);
@@ -88,7 +89,13 @@ export default function App() {
       doc(db, "controls", "recording"),
       (doc) => {
         if (doc.exists()) {
-          setIsRecording(doc.data().status === "recording");
+          const newStatus = doc.data().status === "recording";
+          setIsRecording(newStatus);
+
+          // Reset command tracking when status changes
+          if (newStatus !== isRecording) {
+            lastCommandSent.current = null;
+          }
         }
       },
       (err) => {
@@ -102,51 +109,85 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-6 flex flex-col">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-8">
-        <h1 className="text-2xl font-bold">Meeting Assistant</h1>
-        <div className="flex gap-2 md:gap-4 w-full md:w-auto">
+    <div className="min-h-screen bg-gray-900 text-gray-200 font-sans flex flex-col">
+      {/* Header */}
+      <header className="bg-gray-800 px-4 py-3 shadow-sm flex items-center justify-between border-b border-gray-700">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+            <svg
+              className="w-5 h-5 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-white">Meeting Assistant</h1>
+        </div>
+        <div className="flex gap-2">
           <button
             onClick={clearTranscripts}
-            className="px-3 py-1 md:px-4 md:py-2 rounded-lg font-medium bg-gray-600 hover:bg-gray-700 disabled:opacity-50 flex-1 md:flex-none"
+            className="px-3 py-1.5 rounded-md font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
             disabled={isLoading || !rawTranscript}
           >
-            Restart
+            Clear
           </button>
           <button
             onClick={toggleRecording}
             disabled={isLoading}
-            className={`px-3 py-1 md:px-4 md:py-2 rounded-lg font-medium ${
+            className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
               isRecording
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-green-600 hover:bg-green-700"
-            } disabled:opacity-50 flex-1 md:flex-none`}
+                ? "bg-red-600 hover:bg-red-500 text-white"
+                : "bg-indigo-600 hover:bg-indigo-500 text-white"
+            }`}
           >
-            {isLoading ? "Loading..." : isRecording ? "Stop" : "Start"}
+            {isLoading ? (
+              "Loading..."
+            ) : isRecording ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse mr-2"></span>
+                Recording
+              </>
+            ) : (
+              "Start"
+            )}
           </button>
         </div>
       </header>
 
+      {/* Error Message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-800 text-white rounded-lg flex justify-between">
-          <span>Error: {error}</span>
-          <button onClick={() => setError(null)} className="text-sm underline">
+        <div className="mx-4 mt-2 p-3 bg-red-600 text-white rounded-md flex justify-between items-center">
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="text-sm underline hover:text-gray-300"
+          >
             Dismiss
           </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 flex-1 min-h-0">
-        <div className="lg:col-span-1 h-full">
-          <Transcript
-            rawTranscript={rawTranscript}
-            formattedTranscript={formattedTranscript}
-            activeTranscript={activeTranscript}
-            setActiveTranscript={setActiveTranscript}
-            isLoading={isLoading}
-          />
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Transcript Sidebar */}
+        <div className="w-72 bg-gray-800 flex flex-col border-r border-gray-700">
+          <div className="p-3 border-b border-gray-700">
+            <h2 className="font-semibold text-gray-400 uppercase text-xs tracking-wider">
+              LIVE TRANSCRIPT
+            </h2>
+          </div>
+          <Transcript rawTranscript={rawTranscript} />
         </div>
-        <div className="lg:col-span-3 h-full">
+
+        {/* Notes Area */}
+        <div className="flex-1 flex flex-col bg-gray-700">
           <Notes notes={notes} isLoading={isLoading} />
         </div>
       </div>

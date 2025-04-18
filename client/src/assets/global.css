@@ -1,3 +1,25 @@
-@import "tailwindcss";
+@import "tailwindcss"; 
 @import "highlight.js/styles/github.css";
+@import "@fontsource/open-sans"; 
 @plugin "./typography.js";
+
+
+/* Discord-like scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #1a1b1e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #2f3136;
+}
+
+/* Base styles */
+/* body {
+  @apply bg-discord-darker text-discord-text font-sans;
+} */

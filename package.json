@@ -10,10 +10,12 @@
     "electron": "electron ."
   },
   "dependencies": {
+    "@fontsource/open-sans": "^5.2.5",
     "@fontsource/roboto": "^5.2.5",
     "@tailwindcss/vite": "^4.1.4",
     "@vitejs/plugin-react": "^4.4.0",
     "axios": "^1.6.0",
+    "chalk": "^4.1.2",
     "child_process": "^1.0.2",
     "electron": "^35.1.5",
     "firebase": "^11.6.0",
@@ -24,7 +26,8 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "tailwindcss": "^4.1.4"
+    "tailwindcss": "^4.1.4",
+    "tree-kill": "^1.2.2"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",

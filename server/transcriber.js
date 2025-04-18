@@ -4,7 +4,7 @@ const path = require("path");
 const { doc, setDoc, onSnapshot, getDoc } = require("firebase/firestore");
 const axios = require("axios");
 const { db } = require("./firebase");
-
+const chalk = require("chalk");
 const tempAudioFile = path.resolve(__dirname, "../temp_audio.wav");
 const tempDir = path.resolve(__dirname, "../temp_whisper_output");
 const whisperModel = "base";
@@ -37,12 +37,13 @@ async function startRecording() {
     console.log("[transcriber.js] Starting recording...");
 
     recordingProcess = spawn("ffmpeg", [
+      "-nostdin",
       "-f",
       "avfoundation",
       "-i",
       ":BlackHole 2ch",
       "-t",
-      "60",
+      "5",
       "-y",
       "-acodec",
       "pcm_s16le",
@@ -57,16 +58,16 @@ async function startRecording() {
       if (code === 0) {
         transcribeAudio(tempAudioFile);
       } else {
-        console.error("[transcriber.js] Recording failed:", code);
+        console.log(chalk.red("[transcriber.js] recording failed!: "));
       }
       recordingProcess = null;
     });
 
     recordingProcess.stderr.on("data", (data) => {
-      console.error("[transcriber.js] FFmpeg error:", data.toString());
+      console.log(chalk.red("[transcriber.js] ffmpeg error!"));
     });
   } catch (err) {
-    console.error("[transcriber.js] Recording setup error:", err);
+    console.log(chalk.red("[transcriber.js] recording setup error!"));
   }
 }
 
@@ -164,65 +165,61 @@ async function transcribeAudio(audioFile) {
 
 async function enhanceTranscript(rawText) {
   try {
-    console.log("[transcriber.js] enhance with llm:", rawText);
+    console.log("[transcriber.js] enhance with llm:");
 
-    // Step 1: Formatting
-    const formatResponse = await axios.post(
-      "http://127.0.0.1:11434/api/generate",
-      {
-        model: llmModel,
-        prompt: `Improve this transcript's readability. Add punctuation and paragraphs:\n\n${rawText}\n\nFormatted version:`,
-        stream: false,
-      }
-    );
+    const notes = await axios.post("http://127.0.0.1:11434/api/generate", {
+      model: llmModel,
+      prompt: `You are a professional meeting notes generator. Transform the following video call transcript into concise, structured notes using STRICT MARKDOWN FORMATTING.
 
-    const formattedText = formatResponse.data.response;
+      # INSTRUCTIONS:
+      1. FORMAT: Use exactly this markdown structure (copy headers verbatim):
+      ## Key Points
+      - [3-7 word bullet]
+      - [3-7 word bullet]
+      - [3-7 word bullet]
 
-    const summaryResponse = await axios.post(
-      "http://127.0.0.1:11434/api/generate",
-      {
-        model: llmModel,
-        prompt: `You are an expert meeting assistant. Transform this transcript into structured meeting notes using EXACTLY this format:
+      2. RULES:
+      - MAX 7 words per bullet point
+      - ONLY use bullet points (no numbered lists)
+      - NO paragraphs or long sentences
+      - ABSOLUTELY NO INDENTATION (start bullets at beginning of line)
+      - NO nested bullets
+      - OMIT any section that would be empty
+      - PRESERVE exact markdown syntax (## for headers, - for bullets)
+      - NEVER add information not in the transcript
+      - IGNORE conversational filler (ums, ahs, greetings)
+      - EXTRACT only actionable/important points
 
-        # Meeting Summary
+      3. OUTPUT REQUIREMENTS:
+      - Clean GitHub-flavored markdown
+      - Consistent formatting throughout
+      - Each bullet on its own line
+      - No trailing spaces
+      - No extra line breaks between bullets
 
-        ## Key Discussion Points
-        - [Concise bullet point 3-7 words]
-        - [Concise bullet point 3-7 words]
-        - [Concise bullet point 3-7 words]
+      # TRANSCRIPT TO PROCESS:
+      <|transcript_begin|>
+      ${rawText}
+      <|transcript_end|>
 
-        ## Action Items
-        - [Owner]: [Task in 3-5 words] (due: [date if mentioned])
-        - [Owner]: [Task in 3-5 words] (due: [date if mentioned])
-
-        ## Decisions Made
-        - [Topic]: [Decision in 5-8 words]
-        - [Topic]: [Decision in 5-8 words]
-
-        RULES:
-        1. Use exactly these section headers (with ##)
-        2. Keep bullets VERY short (under 10 words)
-        3. Only include important information
-        4. Omit empty sections completely
-        5. Never indent any lines
-        6. No paragraphs - only bullet points
-        7. Maintain consistent github Markdown syntax
-
-        Transcript:
-        \`\`\`
-        ${formatResponse}
-        \`\`\`
+      # OUTPUT READY (remember: strict markdown, max 7 words per bullet, NO INDENTATION):
     `,
-        stream: false,
-      }
-    );
+      stream: false,
+    });
+
+    // Clean up any accidental whitespace
+    const cleanedNotes = notes.data.response
+      .replace(/\\n/g, "\n") // Unescape newlines
+      .split("\n")
+      .map((line) => line.trimStart()) // Remove any leading whitespace
+      .join("\n")
+      .trim();
 
     const docRef = doc(db, "meetings", "current");
     await setDoc(
       docRef,
       {
-        formattedTranscript: formattedText,
-        meetingNotes: summaryResponse.data.response.replace(/\\n/g, "\n"),
+        meetingNotes: cleanedNotes,
         updatedAt: new Date(),
       },
       { merge: true }
@@ -240,11 +237,33 @@ function setupRecordingListener() {
     if (doc.exists()) {
       const data = doc.data();
       if (data.command === "start") {
+        console.log(
+          "\n\n------------------ START RECORDING ------------------\n\n"
+        );
         startRecording();
         setDoc(ref, { status: "recording" }, { merge: true });
       } else if (data.command === "stop") {
+        console.log(
+          "\n\n------------------ STOP RECORDING ------------------\n\n"
+        );
         stopRecording();
         setDoc(ref, { status: "idle" }, { merge: true });
+      }
+    }
+  });
+}
+
+function setupClearListener() {
+  const clearRef = doc(db, "controls", "clear");
+
+  onSnapshot(clearRef, async (doc) => {
+    if (doc.exists() && doc.data().command === "clear") {
+      console.log("[transcriber.js] Clearing transcripts and files...");
+      try {
+        cleanup(); // This already deletes temp_audio.wav and temp_whisper_output
+        await setDoc(clearRef, { status: "cleared" }, { merge: true });
+      } catch (err) {
+        console.error("[transcriber.js] Clear error:", err);
       }
     }
   });
@@ -254,4 +273,5 @@ module.exports = {
   startRecording,
   stopRecording,
   setupRecordingListener,
+  setupClearListener,
 };
