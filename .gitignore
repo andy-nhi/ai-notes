@@ -12,3 +12,4 @@ transcript.txt
 database-debug.log
 firebase-debug.log
 firestore-debug.log
+/firebase-state
