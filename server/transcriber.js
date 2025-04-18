@@ -5,7 +5,6 @@ const { doc, setDoc, onSnapshot, getDoc } = require("firebase/firestore");
 const axios = require("axios");
 const { db } = require("./firebase");
 
-// Define all temporary file paths
 const tempAudioFile = path.resolve(__dirname, "../temp_audio.wav");
 const tempDir = path.resolve(__dirname, "../temp_whisper_output");
 const whisperModel = "base";
@@ -14,9 +13,7 @@ const llmModel = "mistral";
 let recordingProcess = null;
 let whisperProcess = null;
 
-// Enhanced cleanup function
 function cleanup() {
-  // Remove audio file
   if (fs.existsSync(tempAudioFile)) {
     try {
       fs.unlinkSync(tempAudioFile);
@@ -25,7 +22,6 @@ function cleanup() {
     }
   }
 
-  // Remove whisper output directory
   if (fs.existsSync(tempDir)) {
     try {
       fs.rmSync(tempDir, { recursive: true });
@@ -46,7 +42,7 @@ async function startRecording() {
       "-i",
       ":BlackHole 2ch",
       "-t",
-      "10",
+      "60",
       "-y",
       "-acodec",
       "pcm_s16le",
@@ -182,44 +178,47 @@ async function enhanceTranscript(rawText) {
 
     const formattedText = formatResponse.data.response;
 
-    // Step 2: Speaker identification
-    const speakerResponse = await axios.post(
-      "http://127.0.0.1:11434/api/generate",
-      {
-        model: llmModel,
-        prompt: `Identify speaker changes in this meeting transcript. Format as:\n[Speaker X] text\n\n${formattedText}\n\nSpeaker-labeled version:`,
-        stream: false,
-      }
-    );
-    const speakerText = speakerResponse.data.response;
-
-    // Step 3: Generate notes
     const summaryResponse = await axios.post(
       "http://127.0.0.1:11434/api/generate",
       {
         model: llmModel,
-        prompt: `You are an expert meeting assistant.
-        Given the raw meeting transcript, your job is to extract and summarize the most important points.  
-        Your output should be **concise**, **clearly organized**, and **strictly formatted using valid GitHub-flavored Markdown (GFM)**.
+        prompt: `You are an expert meeting assistant. Given the raw meeting transcript below, extract and summarize the most important points in this EXACT format:
+         
+        ### Key Discussion Points   
+        - [Concise bullet point 3-7 words]
+        - [Concise bullet point 3-7 words] 
+        - [Concise bullet point 3-7 words]
         
-        Here is the transcript to summarize:
+        ### Action Items
+        - [Owner]: [Task description in 3-5 words] (due: [date if mentioned])
+        - [Owner]: [Task description in 3-5 words] (due: [date if mentioned])
         
+        ### Decisions Made
+        - [Topic]: [Decision in 5-8 words]
+        - [Topic]: [Decision in 5-8 words]
+        
+        Rules:
+        1. Keep EVERY bullet point VERY short (under 10 words)
+        2. Only include truly important information
+        3. Use exact format above with these section headers
+        4. If a section has no content, omit it entirely
+        5. Never write paragraphs - only bullet points
+                
+        Transcript:
         \`\`\`
-        ${speakerText}
+        ${formatResponse}
         \`\`\`
-        `,
+    `,
         stream: false,
       }
     );
 
-    // Save all versions to Firestore
     const docRef = doc(db, "meetings", "current");
     await setDoc(
       docRef,
       {
         formattedTranscript: formattedText,
-        speakerTranscript: speakerText,
-        meetingNotes: `# Meeting Notes\n\n${summaryResponse.data.response}`,
+        meetingNotes: `${summaryResponse.data.response}`,
         updatedAt: new Date(),
       },
       { merge: true }
@@ -232,7 +231,7 @@ async function enhanceTranscript(rawText) {
 function setupRecordingListener() {
   const ref = doc(db, "controls", "recording");
 
-  console.log("[transcriber.js] Setting up recording listener...");
+  console.log("[transcriber.js] etting up recording listener...");
   onSnapshot(ref, (doc) => {
     if (doc.exists()) {
       const data = doc.data();
@@ -247,4 +246,8 @@ function setupRecordingListener() {
   });
 }
 
-module.exports = { startRecording, stopRecording, setupRecordingListener };
+module.exports = {
+  startRecording,
+  stopRecording,
+  setupRecordingListener,
+};

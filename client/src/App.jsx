@@ -2,20 +2,17 @@ import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { db } from "./db/firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, deleteDoc, onSnapshot, setDoc } from "firebase/firestore";
 
 export default function App() {
-  // State management
   const [notes, setNotes] = useState("");
   const [rawTranscript, setRawTranscript] = useState("");
   const [formattedTranscript, setFormattedTranscript] = useState("");
-  const [speakerTranscript, setSpeakerTranscript] = useState("");
   const [activeTranscript, setActiveTranscript] = useState("formatted");
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Toggle recording state
   const toggleRecording = async () => {
     try {
       setIsLoading(true);
@@ -36,11 +33,12 @@ export default function App() {
     }
   };
 
-  // Clear all transcripts
   const clearTranscripts = () => {
     setRawTranscript("");
     setFormattedTranscript("");
-    setSpeakerTranscript("");
+    setNotes("");
+    deleteDoc(db, "meetings", "current");
+    deleteDoc(db, "controls", "recording");
   };
 
   // Firebase listeners
@@ -56,7 +54,6 @@ export default function App() {
           const data = doc.data();
           setRawTranscript(data.rawTranscript || "");
           setFormattedTranscript(data.formattedTranscript || "");
-          setSpeakerTranscript(data.speakerTranscript || "");
           setNotes(data.meetingNotes || "");
         }
         setIsLoading(false);
@@ -91,36 +88,9 @@ export default function App() {
     switch (activeTranscript) {
       case "raw":
         return rawTranscript;
-      case "speaker":
-        return speakerTranscript;
       default:
         return formattedTranscript;
     }
-  };
-
-  // Speaker transcript component
-  const SpeakerTranscript = ({ text }) => {
-    if (!text)
-      return <p className="text-gray-400">No speaker data available</p>;
-
-    return (
-      <div className="space-y-2">
-        {text.split("\n").map((line, i) => {
-          const speakerMatch = line.match(/^\[(Speaker \w+)\]/);
-          if (speakerMatch) {
-            return (
-              <div key={i} className="flex gap-2">
-                <span className="font-bold text-blue-300 min-w-[85px]">
-                  {speakerMatch[1]}:
-                </span>
-                <span>{line.replace(speakerMatch[0], "").trim()}</span>
-              </div>
-            );
-          }
-          return <div key={i}>{line}</div>;
-        })}
-      </div>
-    );
   };
 
   return (
@@ -133,7 +103,7 @@ export default function App() {
             className="px-4 py-2 rounded-lg font-medium bg-gray-600 hover:bg-gray-700 disabled:opacity-50"
             disabled={isLoading || !rawTranscript}
           >
-            Clear Transcripts
+            Restart
           </button>
           <button
             onClick={toggleRecording}
@@ -179,16 +149,6 @@ export default function App() {
                 Formatted
               </button>
               <button
-                onClick={() => setActiveTranscript("speaker")}
-                className={`px-3 py-1 text-sm rounded ${
-                  activeTranscript === "speaker"
-                    ? "bg-blue-600"
-                    : "bg-gray-600 hover:bg-gray-700"
-                }`}
-              >
-                Speaker View
-              </button>
-              <button
                 onClick={() => setActiveTranscript("raw")}
                 className={`px-3 py-1 text-sm rounded ${
                   activeTranscript === "raw"
@@ -202,21 +162,16 @@ export default function App() {
           </div>
 
           <div className="h-64 overflow-y-auto bg-gray-700 p-4 rounded whitespace-pre-wrap">
-            {activeTranscript === "speaker" ? (
-              <SpeakerTranscript text={speakerTranscript} />
-            ) : (
-              getCurrentTranscript() || (
-                <p className="text-gray-400">
-                  {isLoading ? "Loading..." : "No transcript available"}
-                </p>
-              )
+            {getCurrentTranscript() || (
+              <p className="text-gray-400">
+                {isLoading ? "Loading..." : "No transcript available"}
+              </p>
             )}
           </div>
         </div>
 
         {/* Notes Panel */}
         <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Meeting Notes</h2>
           <div className="prose max-w-none text-gray-100">
             {isLoading ? (
               <p className="text-gray-400">Loading notes...</p>
